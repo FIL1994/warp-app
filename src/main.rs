@@ -5,8 +5,6 @@ fn hi_user(param: String, accepts: String) -> std::string::String {
 }
 
 fn main() {
-    println!("Hello, world!");
-
     // hello/:string
     let hello = warp::path("hello")
         .and(warp::path::param())
@@ -19,6 +17,12 @@ fn main() {
         .and(warp::header("accept"))
         .map(hi_user);
 
-    let routes = warp::get2().and(hello.or(hi));
+    let json = warp::path("json").map(|| {
+        let ids = vec![1, 2, 3];
+        warp::reply::json(&ids)
+    });
+
+    println!("Starting server");
+    let routes = warp::get2().and(hello.or(hi).or(json));
     warp::serve(routes).run(([127, 0, 0, 1], 3030));
 }
