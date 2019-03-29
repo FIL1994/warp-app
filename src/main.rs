@@ -1,3 +1,7 @@
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
+
 #[macro_use]
 extern crate diesel;
 
@@ -24,6 +28,12 @@ fn sqlite_pool() -> SqlitePool {
     Pool::new(manager).expect("Postgres connection pool could not be created")
 }
 
+#[derive(Deserialize, Serialize)]
+struct Employee {
+    name: String,
+    rate: u32,
+}
+
 fn main() {
     // hello/:string
     let hello = warp::path("hello")
@@ -37,11 +47,6 @@ fn main() {
         .and(warp::header("accept"))
         .map(hi_user);
 
-    let json = warp::path("json").map(|| {
-        let ids = vec![1, 2, 3];
-        warp::reply::json(&ids)
-    });
-
     let pool = sqlite_pool();
     let sq = warp::any()
         .map(move || pool.clone())
@@ -50,13 +55,21 @@ fn main() {
             Err(_) => Err(reject::server_error()),
         });
 
-    let from_db = warp::path::index()
-        .and(sq)
-        .map(|db: PooledSqlite| {
-            "Get Data"
-        });
+    let from_db = warp::path::end().and(sq).map(|db: PooledSqlite| "Get Data");
+
+    let get_json = warp::path("json").map(|| {
+        let ids = vec![1, 2, 3];
+        warp::reply::json(&ids)
+    });
+
+    let post_json = warp::path("json")
+        .and(warp::body::json())
+        .map(|employee: Employee| warp::reply::json(&employee));
+
+    let list = warp::get2().and(from_db.or(hello).or(hi).or(get_json));
+    let create = warp::post2().and(post_json);
 
     println!("Starting server");
-    let routes = warp::get2().and(from_db.or(hello).or(hi).or(json));
+    let routes = list.or(create);
     warp::serve(routes).run(([127, 0, 0, 1], 3030));
 }
